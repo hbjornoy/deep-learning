@@ -48,7 +48,7 @@ def flatten_input_data(input_data):
 #Training models-------------------------------------------------------------------------------------------------------------------
 
 def train_model(train_data, test_data, model, criterion, learning_rate=0.0001,
-                        epochs=10, batch_size=64, threads=2):
+                        epochs=10, batch_size=64, threads=2, checkpoint_name='model'):
 
     # creating dataloaders to enable mini-batches
     train_data_loader = DataLoader(dataset=train_data, num_workers=threads, batch_size=batch_size, shuffle=False)
@@ -61,7 +61,7 @@ def train_model(train_data, test_data, model, criterion, learning_rate=0.0001,
     for epoch in range(epochs):
         train(train_data_loader, model, criterion, optimizer, epoch, epochs, train_data.__len__())
         test(test_data_loader, model, criterion, optimizer, epoch, epochs, test_data.__len__())
-        checkpoint(model, epoch, epochs)
+        checkpoint(model, epoch, epochs, checkpoint_name)
     
     
     
@@ -90,7 +90,7 @@ def train(train_data_loader, model, criterion, optimizer, epoch, epochs, nb_samp
     error_rate = np.mean(error_rate_list)
     if epoch % np.floor(epochs/10) == 0:
         print("===> Epoch {} Complete: Avg. Loss: {:.4f}".format(epoch, loss))
-        print("===> Prediciton Train-error: {:.4f}".format(error_rate))
+        print("===> Prediction TRAIN-error: {:.4f}".format(error_rate))
     return [epoch, error_rate, loss]
     
     
@@ -115,11 +115,11 @@ def test(test_data_loader, model, criterion, optimizer, epoch, epochs, nb_sample
     psnr = avg_psnr / nb_samples
     if epoch % np.floor(epochs/10) == 0:
         print("===> Avg. PSNR: {:.4f} dB".format(psnr))
-        print("===> Prediciton  TEST-error: {:.4f}".format(error_rate))
+        print("===> Prediction  TEST-error: {:.4f}".format(error_rate))
     return [epoch, error_rate, psnr]
     
-def checkpoint(model, epoch, epochs):
-    model_out_path = "checkpoint_models/model_epoch_{}.pth".format(epoch)
+def checkpoint(model, epoch, epochs, checkpoint_name):
+    model_out_path = "checkpoint_models/" + checkpoint_name + "_epoch_{}.pth".format(epoch)
     if epoch % np.floor(epochs/10) == 0:
         torch.save(model, model_out_path)
         print("Checkpoint: {} -------------------------------------".format(model_out_path))
