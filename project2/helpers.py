@@ -40,6 +40,80 @@ def generate_linear_data(n=1000):
     return inputs, targets
 
 
+def split_dataset(inputs, targets, train_perc=0.7):
+    train_inputs = inputs.narrow(0, 0, math.floor(train_perc*inputs.size()[0]))
+    train_targets = targets.narrow(0, 0, math.floor(train_perc*targets.size()[0]))
+
+    test_inputs = inputs.narrow(0, math.floor(train_perc*inputs.size()[0]), inputs.size()[0]-train_inputs.size()[0])
+    test_targets = targets.narrow(0, math.floor(train_perc*targets.size()[0]), targets.size()[0]-train_targets.size()[0])
+    return train_inputs, train_targets, test_inputs, test_targets
+
+
+def train_model(train_inputs, train_targets, test_inputs, test_targets, model, learning_rate=0.001, epochs=100):
+    """
+    Trains the model and returns model and train and test error
+    
+    ///TODO:
+    - make criterion an input
+    """
+    # define optimizer
+    sgd = SGD(model.param(), lr=learning_rate)
+    
+    # constants
+    nb_train_samples = train_inputs.size(0)
+    nb_classes = train_targets.size(1)
+    input_dim = train_inputs.size(1)
+    
+    
+    # training in epochs
+    test_error_list = []
+    train_error_list = []
+
+    for epoch in range(epochs):
+        
+        # Training -------------------------------------------------------------------------------
+        acc_loss = 0
+        nb_train_errors = 0
+        # iterate through samples and accumelate derivatives
+        for n in range(0, nb_train_samples):
+            #clear gradiants 1.(outside loop with samples = GD) 2.(inside loop with samples = SGD)
+            sgd.zero_grad()
+
+            output = model.forward(train_inputs[n])
+            prediction = output.sign().add(1).div(2).abs()
+
+            if int(train_targets[n]) != int(prediction) : nb_train_errors += 1
+            acc_loss = acc_loss + loss(output, train_targets[n])
+            dl_dloss = dloss(prediction, train_targets[n])
+            
+            model.backward(dl_dloss)
+
+            # Gradient step 1.(outside loop with samples = GD) 2.(inside loop with samples = SGD)
+            sgd.step()
+            
+        train_error_list.append((100 * nb_train_errors) / train_inputs.size(0))
+
+
+        # Testing --------------------------------------------------------------------------------
+        nb_test_errors = 0
+        
+        for n in range(0, test_inputs.size(0)):
+            output = model.forward(test_inputs[n])
+            prediction = output.sign().add(1).div(2).abs()
+            
+            if int(test_targets[n]) != int(prediction) : nb_test_errors += 1
+
+        if epoch%(epochs/10) == 0:
+            print('{:d} acc_train_loss {:.02f} acc_train_error {:.02f}% test_error {:.02f}%'
+              .format(epoch,
+                      acc_loss,
+                      (100 * nb_train_errors) / train_inputs.size(0),
+                      (100 * nb_test_errors) / test_inputs.size(0)))
+        test_error_list.append((100 * nb_test_errors) / test_inputs.size(0))
+
+    return model, train_error_list, test_error_list
+
+
 # Modules ------------------------------------------------------------------------
 
 class Module ( object ) :
@@ -96,9 +170,6 @@ class Linear(Module):
     
     def param (self):
         return [(self.weight, self.dl_dw), (self.bias, self.dl_db)]
-    
-    def clear_grad(self):
-        raise NotImplemented
         
 
 class Tanh(Module):
@@ -120,9 +191,6 @@ class Tanh(Module):
     
     def param (self):
         return [(None, None)]
-    
-    def clear_grad(self):
-        raise NotImplemented
         
         
 class ReLu(Module):
@@ -210,9 +278,6 @@ class Linear_regression_model(Module):
     def param ( self ) :
         return [self.fc1.param(), self.tanh.param()]
         
-    def clear_grad(self):
-        raise NotImplemented
-        
         
         
 # 1 Layer Model ---------------------------------------------------------------------------------
@@ -259,4 +324,4 @@ def dloss(pred,target):
     return 2*(pred - target.float())
 
 
-        
+
