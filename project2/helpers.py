@@ -5,6 +5,7 @@
 import math
 import torch
 from torch import FloatTensor, LongTensor, Tensor
+import numpy as np
 
 
 
@@ -124,6 +125,36 @@ class Tanh(Module):
         raise NotImplemented
         
         
+class ReLu(Module):
+    """
+    Activation module: Leaky ReLu to avoid Dying ReLU
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.s = 0
+        
+    def forward(self, input):
+        self.s = input
+        relu = input.clamp(min=0)
+        #print('RELU')
+        #print(relu)
+        return relu
+    
+    def backward(self, grdwrtoutput):
+        #print('INPUT TO BACKWARD')
+        #print(grdwrtoutput)
+        gradients = grdwrtoutput.clone()
+        gradients = gradients.sign().clamp(min=0.01)
+        #print('GRADIENT')
+        #print(gradients)
+        return gradients
+    
+    def param (self):
+        return [(None, None)]  
+        
+        
+        
 class SGD():
     """
     SGD optimizer that alters the models parameters inplace
@@ -181,6 +212,42 @@ class Linear_regression_model(Module):
         
     def clear_grad(self):
         raise NotImplemented
+        
+        
+        
+# 1 Layer Model ---------------------------------------------------------------------------------
+
+class Model_Layer(Module):
+    """
+    One hidden layer
+    """
+    def __init__(self, input_dim, output_dim, hidden_width):
+        super().__init__()
+        self.fc1 = Linear(input_dim, hidden_width)
+        self.ReLu = ReLu()
+        self.fc2 = Linear(hidden_width, output_dim)
+        self.tanh = Tanh()
+        
+    def forward(self, input):
+        out = self.fc1.forward(input)
+        out = self.ReLu.forward(out)
+        out = self.fc2.forward(out)
+        out = self.tanh.forward(out)
+        return out
+    
+    def backward(self, grdwrtoutput):
+        # the first grdwrtoutput will be the output from dloss()
+        dl_ds3 = self.tanh.backward(grdwrtoutput)
+        dl_dx2 = self.fc2.backward(dl_ds3)
+        dl_ds1 = self.ReLu.backward(dl_dx2)
+        dl_dx0 = self.fc1.backward(dl_ds1)
+        
+    def param ( self ) :
+        return [self.fc1.param(), self.ReLu.param(), self.fc2.param(), self.tanh.param()]
+        
+    def clear_grad(self):
+        raise NotImplemented
+        
         
         
 # Temporary lossfunction -----------------------------------------------------------------------
