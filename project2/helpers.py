@@ -5,7 +5,6 @@
 import math
 import torch
 from torch import FloatTensor, LongTensor, Tensor
-import numpy as np
 
 
 
@@ -49,7 +48,7 @@ def split_dataset(inputs, targets, train_perc=0.7):
     return train_inputs, train_targets, test_inputs, test_targets
 
 
-def train_model(train_inputs, train_targets, test_inputs, test_targets, model, learning_rate=0.001, epochs=100):
+def train_model(train_inputs, train_targets, test_inputs, test_targets, model, learning_rate=0.001, epochs=100, debug=False):
     """
     Trains the model and returns model and train and test error
     
@@ -57,7 +56,7 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
     - make criterion an input
     """
     # define optimizer
-    sgd = SGD(model.param(), lr=learning_rate)
+    sgd = HL.SGD(model.param(), lr=learning_rate)
     
     # constants
     nb_train_samples = train_inputs.size(0)
@@ -80,11 +79,17 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
             sgd.zero_grad()
 
             output = model.forward(train_inputs[n])
-            prediction = output.sign().add(1).div(2).abs()
+            prediction = output > 0.5 
 
             if int(train_targets[n]) != int(prediction) : nb_train_errors += 1
-            acc_loss = acc_loss + loss(output, train_targets[n])
-            dl_dloss = dloss(prediction, train_targets[n])
+            acc_loss = acc_loss + HL.loss(output, train_targets[n])
+            dl_dloss = HL.dloss(output, train_targets[n])
+            if debug:
+                print("output: ", output)
+                print("pred: ", prediction)
+                print("target: ", targets[n])
+                print("loss: ", HL.loss(output, train_targets[n]))
+                print("dloss: ", HL.dloss(output, train_targets[n]))
             
             model.backward(dl_dloss)
 
@@ -99,7 +104,7 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
         
         for n in range(0, test_inputs.size(0)):
             output = model.forward(test_inputs[n])
-            prediction = output.sign().add(1).div(2).abs()
+            prediction = output > 0.5 
             
             if int(test_targets[n]) != int(prediction) : nb_test_errors += 1
 
@@ -147,25 +152,45 @@ class Module ( object ) :
 class Linear(Module):
     """
     Layer module: Fully connected layer defined by input dimensions and output_dimensions
+    
+    have epsilon as a input
     """
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, epsilon=10e-1):
         super().__init__()
-        self.weight = Tensor(output_dim, input_dim).normal_(0, 1e-6)
-        self.bias = Tensor(output_dim).normal_(0, 1e-6)
+        self.weight = Tensor(output_dim, input_dim).normal_(0, epsilon)
+        self.bias = Tensor(output_dim).normal_(0, epsilon)
         self.x = 0
         self.dl_dw = Tensor(self.weight.size())
         self.dl_db = Tensor(self.bias.size())
          
-    def forward(self, input):
+    def forward(self, input, debug=False):
         self.x = input
+        if debug:
+            print("\nFORWARD:")
+            print("input: ", input)
+            print("weights: ", self.weight)
+            print("bias: ", self.bias)
+            print("output: ", (self.weight.mv(self.x) + self.bias))
         return self.weight.mv(self.x) + self.bias
     
-    def backward(self, grdwrtoutput):
+    def backward(self, grdwrtoutput, debug=False):
+        if debug:
+            print("\nBACKWARD:")
+            print("grdwrtoutput: ", grdwrtoutput)
+            print("weights: ", self.weight)
+            print("bias: ", self.bias)
+            print("update dl_dw: ", grdwrtoutput.view(-1,1).mm(self.x.view(1,-1)))
+            print("dl_dw: ", self.dl_dw)
+            print("dl_db: ", self.dl_db)
         # dl_dw.add_(dl_ds.view(-1,1).mm(x.view(1,-1)))
         # accumulate derivatives
         self.dl_dw.add_(grdwrtoutput.view(-1,1).mm(self.x.view(1,-1)))
         self.dl_db.add_(grdwrtoutput)
         # returning dl_dx
+        if debug:
+            print("dl_dw after: ", self.dl_dw)
+            print("dl_db after: ", self.dl_db)
+            print('output(self.weight.t().mv(grdwrtoutput)): ', self.weight.t().mv(grdwrtoutput))
         return self.weight.t().mv(grdwrtoutput)
     
     def param (self):
@@ -191,37 +216,6 @@ class Tanh(Module):
     
     def param (self):
         return [(None, None)]
-        
-        
-class ReLu(Module):
-    """
-    Activation module: Leaky ReLu to avoid Dying ReLU
-    """
-    
-    def __init__(self):
-        super().__init__()
-        self.s = 0
-        
-    def forward(self, input):
-        self.s = input
-        relu = input.clamp(min=0)
-        #print('RELU')
-        #print(relu)
-        return relu
-    
-    def backward(self, grdwrtoutput):
-        #print('INPUT TO BACKWARD')
-        #print(grdwrtoutput)
-        gradients = grdwrtoutput.clone()
-        gradients = gradients.sign().clamp(min=0.01)
-        #print('GRADIENT')
-        #print(gradients)
-        return gradients
-    
-    def param (self):
-        return [(None, None)]  
-        
-        
         
 class SGD():
     """
@@ -263,56 +257,18 @@ class Linear_regression_model(Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
         self.fc1 = Linear(input_dim, output_dim)
-        self.tanh = Tanh()
         
     def forward(self, input):
         out = self.fc1.forward(input)
-        out = self.tanh.forward(out)
         return out
     
     def backward(self, grdwrtoutput):
         # the first grdwrtoutput will be dl_x1 from dloss()
-        dl_ds1 = self.tanh.backward(grdwrtoutput) # must store s1 from forward and cumelative dl_ds
-        dl_dx0 = self.fc1.backward(dl_ds1) # must store x0 from forward
+        dl_dx0 = self.fc1.backward(grdwrtoutput)
         
     def param ( self ) :
-        return [self.fc1.param(), self.tanh.param()]
-        
-        
-        
-# 1 Layer Model ---------------------------------------------------------------------------------
+        return [self.fc1.param()]
 
-class Model_Layer(Module):
-    """
-    One hidden layer
-    """
-    def __init__(self, input_dim, output_dim, hidden_width):
-        super().__init__()
-        self.fc1 = Linear(input_dim, hidden_width)
-        self.ReLu = ReLu()
-        self.fc2 = Linear(hidden_width, output_dim)
-        self.tanh = Tanh()
-        
-    def forward(self, input):
-        out = self.fc1.forward(input)
-        out = self.ReLu.forward(out)
-        out = self.fc2.forward(out)
-        out = self.tanh.forward(out)
-        return out
-    
-    def backward(self, grdwrtoutput):
-        # the first grdwrtoutput will be the output from dloss()
-        dl_ds3 = self.tanh.backward(grdwrtoutput)
-        dl_dx2 = self.fc2.backward(dl_ds3)
-        dl_ds1 = self.ReLu.backward(dl_dx2)
-        dl_dx0 = self.fc1.backward(dl_ds1)
-        
-    def param ( self ) :
-        return [self.fc1.param(), self.ReLu.param(), self.fc2.param(), self.tanh.param()]
-        
-    def clear_grad(self):
-        raise NotImplemented
-        
         
         
 # Temporary lossfunction -----------------------------------------------------------------------
