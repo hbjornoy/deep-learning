@@ -49,7 +49,7 @@ def split_dataset(inputs, targets, train_perc=0.7):
     return train_inputs, train_targets, test_inputs, test_targets
 
 
-def train_model(train_inputs, train_targets, test_inputs, test_targets, model, learning_rate=0.001, epochs=100):
+def train_model(train_inputs, train_targets, test_inputs, test_targets, model, learning_rate=0.001, epochs=1000):
     """
     Trains the model and returns model and train and test error
     
@@ -84,7 +84,7 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
 
             if int(train_targets[n]) != int(prediction) : nb_train_errors += 1
             acc_loss = acc_loss + loss(output, train_targets[n])
-            dl_dloss = dloss(prediction, train_targets[n])
+            dl_dloss = dloss(output, train_targets[n])
             
             model.backward(dl_dloss)
 
@@ -195,7 +195,7 @@ class Tanh(Module):
         
 class ReLu(Module):
     """
-    Activation module: Leaky ReLu to avoid Dying ReLU
+    Activation module: ReLu
     """
     
     def __init__(self):
@@ -213,7 +213,7 @@ class ReLu(Module):
         #print('INPUT TO BACKWARD')
         #print(grdwrtoutput)
         gradients = grdwrtoutput.clone()
-        gradients = gradients.sign().clamp(min=0.01)
+        gradients = gradients.sign().clamp(min=0)
         #print('GRADIENT')
         #print(gradients)
         return gradients
@@ -274,6 +274,7 @@ class Linear_regression_model(Module):
         # the first grdwrtoutput will be dl_x1 from dloss()
         dl_ds1 = self.tanh.backward(grdwrtoutput) # must store s1 from forward and cumelative dl_ds
         dl_dx0 = self.fc1.backward(dl_ds1) # must store x0 from forward
+        #dl_dx0 = self.fc1.backward(grdwrtoutput)
         
     def param ( self ) :
         return [self.fc1.param(), self.tanh.param()]
