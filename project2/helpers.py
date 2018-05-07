@@ -3,9 +3,11 @@
 # IMPORTS
 # Definitely allowed imports
 import math
-import torch
 from torch import FloatTensor, LongTensor, Tensor
 
+# Not allowed import
+#import numpy as np
+import torch
 
 
 
@@ -47,6 +49,22 @@ def split_dataset(inputs, targets, train_perc=0.7):
     test_targets = targets.narrow(0, math.floor(train_perc*targets.size()[0]), targets.size()[0]-train_targets.size()[0])
     return train_inputs, train_targets, test_inputs, test_targets
 
+def handle_output(output_function):
+    if output_function == 'linear':
+        pass
+    
+    elif output_function == 'tanh':
+        pass
+    
+    
+def convert_to_one_hot_labels(input, target):
+    tmp = input.new(target.size(0), target.max() + 1).fill_(-1)
+    tmp.scatter_(1, target.view(-1, 1), 1.0)
+    return tmp
+
+
+
+### MODEL FOR LINEAR WITH TWO OUTPUT NODES
 
 def train_model(train_inputs, train_targets, test_inputs, test_targets, model, learning_rate=0.001, epochs=100, debug=False):
 
@@ -56,6 +74,12 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
     ///TODO:
     - make criterion an input
     """
+    
+    # make train targets and test targets to 1-hot vector
+    train_targets = convert_to_one_hot_labels(train_inputs, train_targets)
+    test_targets = convert_to_one_hot_labels(test_inputs, test_targets)    
+    
+    
     # define optimizer
     sgd = SGD(model.param(), lr=learning_rate)
     
@@ -76,16 +100,30 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
         nb_train_errors = 0
         # iterate through samples and accumelate derivatives
         for n in range(0, nb_train_samples):
-            #clear gradiants 1.(outside loop with samples = GD) 2.(inside loop with samples = SGD)
+            # clear gradiants 1.(outside loop with samples = GD) 2.(inside loop with samples = SGD)
             sgd.zero_grad()
-
+            
+            ### In order to get nb_train_errors, check how many correctly classified
+            
+            a_train_target = train_targets[n]
+            train_targets_list = [a_train_target[0], a_train_target[1]]
+            correct = train_targets_list.index(max(train_targets_list)) # argmax
+            
+            # Find which one is predicted of the two outputs, by taking argmax
             output = model.forward(train_inputs[n])
-            prediction = output > 0.5 
+            output_list = [output[0], output[1]]
 
-            if int(train_targets[n]) != int(prediction) : nb_train_errors += 1
+            prediction = output_list.index(max(output_list)) # argmax
+           
+            
+            # Check if predicted correctly
+            if int(correct) != int(prediction) : nb_train_errors += 1
+            
 
-            acc_loss = acc_loss + loss(output, train_targets[n])
-            dl_dloss = dloss(output, train_targets[n])
+            ### Calculate loss 
+            acc_loss = acc_loss + loss(output, train_targets[n].float())
+            dl_dloss = dloss(output, train_targets[n].float())
+  
 
             if debug:
                 print("output: ", output)
@@ -93,11 +131,10 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
                 print("target: ", targets[n])
                 print("loss: ", loss(output, train_targets[n]))
                 print("dloss: ", dloss(output, train_targets[n]))
-
-            
+             
             model.backward(dl_dloss)
 
-            # Gradient step 1.(outside loop with samples = GD) 2.(inside loop with samples = SGD)
+            ### Gradient step 1.(outside loop with samples = GD) 2.(inside loop with samples = SGD)
             sgd.step()
             
         train_error_list.append((100 * nb_train_errors) / train_inputs.size(0))
@@ -107,10 +144,20 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
         nb_test_errors = 0
         
         for n in range(0, test_inputs.size(0)):
-            output = model.forward(test_inputs[n])
-            prediction = output > 0.5 
             
-            if int(test_targets[n]) != int(prediction) : nb_test_errors += 1
+            
+            ### In order to get nb_train_errors, check how many correctly classified
+            
+            a_test_target = test_targets[n]
+            test_targets_list = [a_test_target[0], a_test_target[1]]
+            correct = test_targets_list.index(max(test_targets_list)) # argmax
+            
+            ### Find which one is predicted of the two outputs, by taking argmax            
+            
+            output = model.forward(test_inputs[n])
+            output_list = [output[0], output[1]]
+            prediction = output_list.index(max(output_list))
+            if int(correct) != int(prediction) : nb_test_errors += 1
 
         if epoch%(epochs/10) == 0:
             print('{:d} acc_train_loss {:.02f} acc_train_error {:.02f}% test_error {:.02f}%'
@@ -121,6 +168,8 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
         test_error_list.append((100 * nb_test_errors) / test_inputs.size(0))
 
     return model, train_error_list, test_error_list
+
+
 
 
 # Modules ------------------------------------------------------------------------
@@ -186,8 +235,7 @@ class Linear(Module):
             print("update dl_dw: ", grdwrtoutput.view(-1,1).mm(self.x.view(1,-1)))
             print("dl_dw: ", self.dl_dw)
             print("dl_db: ", self.dl_db)
-        # dl_dw.add_(dl_ds.view(-1,1).mm(x.view(1,-1)))
-        # accumulate derivatives
+
         self.dl_dw.add_(grdwrtoutput.view(-1,1).mm(self.x.view(1,-1)))
         self.dl_db.add_(grdwrtoutput)
         # returning dl_dx
@@ -234,17 +282,12 @@ class ReLu(Module):
     def forward(self, input):
         self.s = input
         relu = input.clamp(min=0)
-        #print('RELU')
-        #print(relu)
         return relu
     
     def backward(self, grdwrtoutput):
-        #print('INPUT TO BACKWARD')
-        #print(grdwrtoutput)
         gradients = grdwrtoutput.clone()
         gradients = gradients.sign().clamp(min=0)
-        #print('GRADIENT')
-        #print(gradients)
+
         return gradients
     
     def param (self):
@@ -298,21 +341,112 @@ class Linear_regression_model(Module):
     
     def backward(self, grdwrtoutput):
         # the first grdwrtoutput will be dl_x1 from dloss()
-
         dl_dx0 = self.fc1.backward(grdwrtoutput)
         
     def param ( self ) :
         return [self.fc1.param()]
+    
+    
+    
+class Linear_Tanh_model(Module):
+    """
+    Linear model with a Tanh in the end
+    """
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        self.fc1 = Linear(input_dim, output_dim)
+        self.tanh = Tanh()
+        
+    def forward(self, input):
+        out = self.fc1.forward(input)
+        out = self.tanh.forward(out)
+        return out
+    
+    def backward(self, grdwrtoutput):
+        # the first grdwrtoutput will be dl_x1 from dloss()
+        dl_ds1 = self.tanh.backward(grdwrtoutput)
+        dl_dx0 = self.fc1.backward(dl_ds1)
+
+        
+       
+    def param ( self ) :
+        return [self.fc1.param(), self.tanh.param()]
+    
+    
+    
+class Linear_TanhTanh_model(Module):
+    
+    """
+    Linear model with a Tanh in the end
+    """
+    def __init__(self, input_dim, output_dim):
+        hidden_width = 25
+        super().__init__()
+        self.fc1 = Linear(input_dim, hidden_width)
+        self.tanh1 = Tanh()
+        self.fc2 = Linear(hidden_width, output_dim)
+        self.tanh2 = Tanh()
+        
+    def forward(self, input):
+        out = self.fc1.forward(input)
+        out = self.tanh1.forward(out)
+        out = self.fc2.forward(out)
+        out = self.tanh2.forward(out)
+        return out
+    
+    def backward(self, grdwrtoutput):
+        # the first grdwrtoutput will be dl_x1 from dloss()
+        dl_ds3 = self.tanh2.backward(grdwrtoutput)
+        dl_dx2 = self.fc2.backward(dl_ds3)
+        dl_ds1 = self.tanh1.backward(dl_dx2)
+        dl_dx0 = self.fc1.backward(dl_ds1)
+       
+    def param ( self ) :
+        return [self.fc1.param(), self.tanh1.param(), self.fc2.param(), self.tanh2.param()]
+    
+    
+    
+    
+    
+class Linear_Relu_model(Module):
+    
+    """
+    Linear model with a Tanh in the end
+    """
+    def __init__(self, input_dim, output_dim):
+        hidden_width = 25
+        super().__init__()
+        self.fc1 = Linear(input_dim, hidden_width)
+        self.relu = ReLu()
+        self.fc2 = Linear(hidden_width, output_dim)
+        self.tanh = Tanh()
+        
+    def forward(self, input):
+        out = self.fc1.forward(input)
+        out = self.relu.forward(out)
+        out = self.fc2.forward(out)
+        out = self.tanh.forward(out)
+        return out
+    
+    def backward(self, grdwrtoutput):
+        # the first grdwrtoutput will be dl_x1 from dloss()
+        dl_ds3 = self.tanh.backward(grdwrtoutput)
+        dl_dx2 = self.fc2.backward(dl_ds3)
+        dl_ds1 = self.relu.backward(dl_dx2)
+        dl_dx0 = self.fc1.backward(dl_ds1)
+       
+    def param ( self ) :
+        return [self.fc1.param(), self.relu.param(), self.fc2.param(), self.tanh.param()]
+
 
         
         
 # Temporary lossfunction -----------------------------------------------------------------------
-        
+
 def loss(pred,target):
     return (pred - target.float()).pow(2).sum()
 
 def dloss(pred,target):
     return 2*(pred - target.float())
-
 
 
