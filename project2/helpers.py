@@ -379,8 +379,8 @@ class Linear_TanhTanh_model(Module):
     """
     Linear model with a Tanh in the end
     """
-    def __init__(self, input_dim, output_dim):
-        hidden_width = 25
+    def __init__(self, input_dim, output_dim, hidden_width):
+        #hidden_width = 25
         super().__init__()
         self.fc1 = Linear(input_dim, hidden_width)
         self.tanh1 = Tanh()
@@ -405,16 +405,12 @@ class Linear_TanhTanh_model(Module):
         return [self.fc1.param(), self.tanh1.param(), self.fc2.param(), self.tanh2.param()]
     
     
-    
-    
-    
 class Linear_Relu_model(Module):
     
     """
     Linear model with a Tanh in the end
     """
-    def __init__(self, input_dim, output_dim):
-        hidden_width = 25
+    def __init__(self, input_dim, output_dim, hidden_width):
         super().__init__()
         self.fc1 = Linear(input_dim, hidden_width)
         self.relu = ReLu()
@@ -438,6 +434,45 @@ class Linear_Relu_model(Module):
     def param ( self ) :
         return [self.fc1.param(), self.relu.param(), self.fc2.param(), self.tanh.param()]
 
+
+# Sequential -------------------------------------------------------------------------------    
+    
+### TODO: Check if args is null
+
+class Sequential(Module):
+    def __init__(self, *args):
+        super().__init__()
+        self.modules = []
+        print('args')
+        args = list(args)[0]
+        print(args)
+        for ind, module in enumerate(args):
+            print('module')
+            print(module)
+            self.add_module(str(ind), module)
+
+    def add_module(self, ind, module):
+        self.ind = module
+        self.modules.append(self.ind)
+        return module
+    
+    def forward(self, input):
+        out = input
+        for module in self.modules:
+            out = module.forward(out)
+        return out
+    
+    def backward(self, grdwrtoutput):
+        reversed_modules = self.modules[::-1]
+        out = grdwrtoutput
+        for module in reversed_modules:
+            out = module.backward(out)
+    
+    def param ( self ) :
+        parameters = []
+        for module in self.modules:
+            parameters.append(module.param())
+        return parameters
 
         
         
