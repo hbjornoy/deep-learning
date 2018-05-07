@@ -260,7 +260,16 @@ class Tanh(Module):
         
     def forward(self, input):
         self.s = input
-        return torch.tanh(input)
+        
+        # apply tanh elementwise to torch
+        tanh_vector = []
+        for x in input:
+            tanh = (2/ (1 + math.exp(-2*x))) -1
+            tanh_vector.append(tanh)
+        tanh_vector = torch.FloatTensor(tanh_vector)
+
+        return tanh_vector
+        #return torch.tanh(input)
     
     def backward(self, grdwrtoutput):
         # dl_ds = dsigma(s) * dl_dx
