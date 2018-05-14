@@ -6,7 +6,6 @@ import math
 from torch import FloatTensor, LongTensor, Tensor
 
 # Not allowed import
-#import numpy as np
 import torch
 
 
@@ -49,16 +48,10 @@ def split_dataset(inputs, targets, train_perc=0.7):
     test_targets = targets.narrow(0, math.floor(train_perc*targets.size()[0]), targets.size()[0]-train_targets.size()[0])
     return train_inputs, train_targets, test_inputs, test_targets
 
-def handle_output(output_function):
-    if output_function == 'linear':
-        pass
-    
-    elif output_function == 'tanh':
-        pass
-    
     
 def convert_to_one_hot_labels(input, target):
     tmp = input.new(target.size(0), target.max() + 1).fill_(-1)
+    #tmp = input.new(target.size(0), target.max() + 1).fill_(0)
     tmp.scatter_(1, target.view(-1, 1), 1.0)
     return tmp
 
@@ -105,25 +98,26 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
             
             ### In order to get nb_train_errors, check how many correctly classified
             
+            # Get index of correct one, by taking argmax
             a_train_target = train_targets[n]
             train_targets_list = [a_train_target[0], a_train_target[1]]
-            correct = train_targets_list.index(max(train_targets_list)) # argmax
+            correct = train_targets_list.index(max(train_targets_list))
             
-            # Find which one is predicted of the two outputs, by taking argmax
+            
             output = model.forward(train_inputs[n])
+            
+            # Get index of the predicted of the two outputs, by taking argmax
             output_list = [output[0], output[1]]
 
-            prediction = output_list.index(max(output_list)) # argmax
-           
+            prediction = output_list.index(max(output_list))
             
             # Check if predicted correctly
             if int(correct) != int(prediction) : nb_train_errors += 1
-            
+
 
             ### Calculate loss 
             acc_loss = acc_loss + loss(output, train_targets[n].float())
             dl_dloss = dloss(output, train_targets[n].float())
-  
 
             if debug:
                 print("output: ", output)
@@ -158,8 +152,9 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
             output_list = [output[0], output[1]]
             prediction = output_list.index(max(output_list))
             if int(correct) != int(prediction) : nb_test_errors += 1
+                
 
-        if epoch%(epochs/10) == 0:
+        if epoch%(epochs/20) == 0:
             print('{:d} acc_train_loss {:.02f} acc_train_error {:.02f}% test_error {:.02f}%'
               .format(epoch,
                       acc_loss,
@@ -206,11 +201,13 @@ class Linear(Module):
     """
     Layer module: Fully connected layer defined by input dimensions and output_dimensions
     
-    have epsilon as a input
     """
-    def __init__(self, input_dim, output_dim, epsilon=10e-1):
+    #def __init__(self, input_dim, output_dim, epsilon=1):
+    def __init__(self, input_dim, output_dim, epsilon=1):
         super().__init__()
-        self.weight = Tensor(output_dim, input_dim).normal_(0, epsilon)
+        self.weight = Tensor(output_dim, input_dim).normal_(mean=0, std=epsilon)
+        # Divide weight vector by output dimension - standarization
+        #self.weight = torch.div(self.weight, output_dim)
         self.bias = Tensor(output_dim).normal_(0, epsilon)
         self.x = 0
         self.dl_dw = Tensor(self.weight.size())
@@ -269,10 +266,8 @@ class Tanh(Module):
         tanh_vector = torch.FloatTensor(tanh_vector)
 
         return tanh_vector
-        #return torch.tanh(input)
     
     def backward(self, grdwrtoutput):
-        # dl_ds = dsigma(s) * dl_dx
         return 4 * ((self.s.exp() + self.s.mul(-1).exp()).pow(-2)) * grdwrtoutput
     
     def param (self):
@@ -291,14 +286,15 @@ class ReLu(Module):
     def forward(self, input):
         self.s = input
         relu = input.clamp(min=0)
+        #relu = input
         return relu
     
     def backward(self, grdwrtoutput):
-        gradients = grdwrtoutput.clone()
-        gradients = gradients.sign().clamp(min=0)
+        relu_input = self.s
+        der_relu = relu_input.sign().clamp(min=0)
+        gradient_in = grdwrtoutput * der_relu
+        return gradient_in    
 
-        return gradients
-    
     def param (self):
         return [(None, None)]  
         
@@ -333,115 +329,6 @@ class SGD():
                 else:
                     grad.zero_()
                 
-                
-# Models -------------------------------------------------------------------------------------
-
-class Linear_regression_model(Module):
-    """
-    Linear model with no hidden layers. It is an example model for testing in development
-    """
-    def __init__(self, input_dim, output_dim):
-        super().__init__()
-        self.fc1 = Linear(input_dim, output_dim)
-        
-    def forward(self, input):
-        out = self.fc1.forward(input)
-        return out
-    
-    def backward(self, grdwrtoutput):
-        # the first grdwrtoutput will be dl_x1 from dloss()
-        dl_dx0 = self.fc1.backward(grdwrtoutput)
-        
-    def param ( self ) :
-        return [self.fc1.param()]
-    
-    
-    
-class Linear_Tanh_model(Module):
-    """
-    Linear model with a Tanh in the end
-    """
-    def __init__(self, input_dim, output_dim):
-        super().__init__()
-        self.fc1 = Linear(input_dim, output_dim)
-        self.tanh = Tanh()
-        
-    def forward(self, input):
-        out = self.fc1.forward(input)
-        out = self.tanh.forward(out)
-        return out
-    
-    def backward(self, grdwrtoutput):
-        # the first grdwrtoutput will be dl_x1 from dloss()
-        dl_ds1 = self.tanh.backward(grdwrtoutput)
-        dl_dx0 = self.fc1.backward(dl_ds1)
-
-        
-       
-    def param ( self ) :
-        return [self.fc1.param(), self.tanh.param()]
-    
-    
-    
-class Linear_TanhTanh_model(Module):
-    
-    """
-    Linear model with a Tanh in the end
-    """
-    def __init__(self, input_dim, output_dim, hidden_width):
-        #hidden_width = 25
-        super().__init__()
-        self.fc1 = Linear(input_dim, hidden_width)
-        self.tanh1 = Tanh()
-        self.fc2 = Linear(hidden_width, output_dim)
-        self.tanh2 = Tanh()
-        
-    def forward(self, input):
-        out = self.fc1.forward(input)
-        out = self.tanh1.forward(out)
-        out = self.fc2.forward(out)
-        out = self.tanh2.forward(out)
-        return out
-    
-    def backward(self, grdwrtoutput):
-        # the first grdwrtoutput will be dl_x1 from dloss()
-        dl_ds3 = self.tanh2.backward(grdwrtoutput)
-        dl_dx2 = self.fc2.backward(dl_ds3)
-        dl_ds1 = self.tanh1.backward(dl_dx2)
-        dl_dx0 = self.fc1.backward(dl_ds1)
-       
-    def param ( self ) :
-        return [self.fc1.param(), self.tanh1.param(), self.fc2.param(), self.tanh2.param()]
-    
-    
-class Linear_Relu_model(Module):
-    
-    """
-    Linear model with a Tanh in the end
-    """
-    def __init__(self, input_dim, output_dim, hidden_width):
-        super().__init__()
-        self.fc1 = Linear(input_dim, hidden_width)
-        self.relu = ReLu()
-        self.fc2 = Linear(hidden_width, output_dim)
-        self.tanh = Tanh()
-        
-    def forward(self, input):
-        out = self.fc1.forward(input)
-        out = self.relu.forward(out)
-        out = self.fc2.forward(out)
-        out = self.tanh.forward(out)
-        return out
-    
-    def backward(self, grdwrtoutput):
-        # the first grdwrtoutput will be dl_x1 from dloss()
-        dl_ds3 = self.tanh.backward(grdwrtoutput)
-        dl_dx2 = self.fc2.backward(dl_ds3)
-        dl_ds1 = self.relu.backward(dl_dx2)
-        dl_dx0 = self.fc1.backward(dl_ds1)
-       
-    def param ( self ) :
-        return [self.fc1.param(), self.relu.param(), self.fc2.param(), self.tanh.param()]
 
 
 # Sequential -------------------------------------------------------------------------------    
@@ -452,7 +339,6 @@ class Sequential(Module):
     def __init__(self, *args):
         super().__init__()
         self.modules = []
-        print('args')
         args = list(args)[0]
         print(args)
         for ind, module in enumerate(args):
