@@ -213,7 +213,7 @@ def test_models(train_data, val_data, test_data, models):
 
 #Plotting -------------------------------------------------------------------------------------------------------------------
 
-def plot_model_training(history, models=["lstm_1"], name="NEW"): # ex: model=["lstm", "dense"]
+def plot_model_training(history, models=["lstm_1"], name="NEW", plt_name="test"): # ex: model=["lstm", "dense"]
     fig, axarr = plt.subplots(2, 2, figsize=(15,10))
     # store all the data about from training for all the models in histories
     histories = list()
@@ -237,7 +237,7 @@ def plot_model_training(history, models=["lstm_1"], name="NEW"): # ex: model=["l
         # plot with respect to time (only interesting with several models)
         create_subplot(axarr[1,0], history[:,5], [history[:,1],history[:,3]], 
                        labels=[name+'_train_acc', name+'_val_acc'], ylabel="prediction error", xlabel="time (seconds)")
-
+    plt.savefig("images/lineplot_" + plt_name)
     plt.show()
     
 def create_subplot(ax, x, y_s, labels, ylabel, xlabel="epochs"):
