@@ -1,18 +1,13 @@
-# Helper functions and classes
-
 # IMPORTS
-# Definitely allowed imports
 import math
 from torch import FloatTensor, LongTensor, Tensor
-
-# Not allowed import
 import torch
 
 
 
 # Data creating/handling ------------------------------------------------------
 
-def generate_disc_data(n=1000):
+def generate_disc_data(n=1000, seed=123):
     """
     generates a dataset with a uniformly sampled data in the range [0,1] in two dimensions, with labels beeing 1 inside
     a circle with radius 1/sqrt(2*pi) and labels with 1 on the inside and 0 on the outside of the circle
@@ -21,6 +16,7 @@ def generate_disc_data(n=1000):
     inputs  : nx2 dimension FloatTensor
     targets : nx1 dimension LongTensor with range [0,1] 
     """
+    torch.manual_seed(seed)
     inputs = torch.rand(n,2)
     euclidian_distances = torch.norm((inputs - torch.Tensor([[0.5, 0.5]])).abs(), 2, 1, True)
     targets = euclidian_distances.mul(math.sqrt(2*math.pi)).sub(1).sign().sub(1).div(2).abs().long()
@@ -35,23 +31,31 @@ def generate_linear_data(n=1000):
     inputs  : nx2 dimension FloatTensor
     targets : nx1 dimension LongTensor with range [0,1] 
     """
+    torch.manual_seed(123)
     inputs = torch.rand(n,2)
     targets = torch.sum(inputs, dim=1).sub(0.9).sign().sub(1).div(2).abs().long().view(-1, 1)
     return inputs, targets
 
 
-def split_dataset(inputs, targets, train_perc=0.7):
-    train_inputs = inputs.narrow(0, 0, math.floor(train_perc*inputs.size()[0]))
-    train_targets = targets.narrow(0, 0, math.floor(train_perc*targets.size()[0]))
+def split_dataset(inputs, targets, train_perc=0.7, val_perc=0.1, test_perc=0.2):
+    train_len = math.floor(inputs.size()[0] * train_perc)
+    val_len = math.floor(inputs.size()[0] * val_perc)
+    test_len = math.floor(inputs.size()[0] * test_perc)
+    
+    train_inputs = inputs.narrow(0, 0, train_len)
+    train_targets = targets.narrow(0, 0, train_len)
+    
+    validation_inputs = inputs.narrow(0, train_len, val_len)
+    validation_targets = targets.narrow(0, train_len, val_len)
 
-    test_inputs = inputs.narrow(0, math.floor(train_perc*inputs.size()[0]), inputs.size()[0]-train_inputs.size()[0])
-    test_targets = targets.narrow(0, math.floor(train_perc*targets.size()[0]), targets.size()[0]-train_targets.size()[0])
-    return train_inputs, train_targets, test_inputs, test_targets
+    test_inputs = inputs.narrow(0, train_len+val_len, test_len)
+    test_targets = targets.narrow(0, train_len+val_len, test_len)
+    
+    return train_inputs, train_targets, validation_inputs, validation_targets, test_inputs, test_targets
 
     
 def convert_to_one_hot_labels(input, target):
     tmp = input.new(target.size(0), target.max() + 1).fill_(-1)
-    #tmp = input.new(target.size(0), target.max() + 1).fill_(0)
     tmp.scatter_(1, target.view(-1, 1), 1.0)
     return tmp
 
@@ -155,9 +159,9 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
                 
 
         if epoch%(epochs/20) == 0:
-            print('{:d} acc_train_loss {:.02f} acc_train_error {:.02f}% test_error {:.02f}%'
+            print('{:d} acc_train_loss {:.02f} acc_train_error {:.02f}% validation_error {:.02f}%'
               .format(epoch,
-                      acc_loss,
+                      acc_loss/nb_train_samples,
                       (100 * nb_train_errors) / train_inputs.size(0),
                       (100 * nb_test_errors) / test_inputs.size(0)))
         test_error_list.append((100 * nb_test_errors) / test_inputs.size(0))
@@ -165,6 +169,34 @@ def train_model(train_inputs, train_targets, test_inputs, test_targets, model, l
     return model, train_error_list, test_error_list
 
 
+def test_model(model, test_inputs, test_targets):
+    
+    # make test targets to 1-hot vector
+    test_targets = convert_to_one_hot_labels(test_inputs, test_targets)    
+    
+    test_error_list = []
+    
+    nb_test_errors = 0
+
+    for n in range(0, test_inputs.size(0)):
+
+
+        ### In order to get nb_train_errors, check how many correctly classified
+
+        a_test_target = test_targets[n]
+        test_targets_list = [a_test_target[0], a_test_target[1]]
+        correct = test_targets_list.index(max(test_targets_list)) # argmax
+
+        ### Find which one is predicted of the two outputs, by taking argmax            
+        output = model.forward(test_inputs[n])
+        output_list = [output[0], output[1]]
+        prediction = output_list.index(max(output_list))
+        if int(correct) != int(prediction) : nb_test_errors += 1
+
+
+    print('test_error {:.02f}%'.format(((100 * nb_test_errors) / test_inputs.size(0))))
+    test_error_list.append((100 * nb_test_errors) / test_inputs.size(0))
+    return 
 
 
 # Modules ------------------------------------------------------------------------
@@ -202,12 +234,9 @@ class Linear(Module):
     Layer module: Fully connected layer defined by input dimensions and output_dimensions
     
     """
-    #def __init__(self, input_dim, output_dim, epsilon=1):
     def __init__(self, input_dim, output_dim, epsilon=1):
         super().__init__()
         self.weight = Tensor(output_dim, input_dim).normal_(mean=0, std=epsilon)
-        # Divide weight vector by output dimension - standarization
-        #self.weight = torch.div(self.weight, output_dim)
         self.bias = Tensor(output_dim).normal_(0, epsilon)
         self.x = 0
         self.dl_dw = Tensor(self.weight.size())
@@ -332,18 +361,13 @@ class SGD():
 
 
 # Sequential -------------------------------------------------------------------------------    
-    
-### TODO: Check if args is null
 
 class Sequential(Module):
     def __init__(self, *args):
         super().__init__()
         self.modules = []
         args = list(args)[0]
-        print(args)
         for ind, module in enumerate(args):
-            print('module')
-            print(module)
             self.add_module(str(ind), module)
 
     def add_module(self, ind, module):
@@ -371,7 +395,7 @@ class Sequential(Module):
 
         
         
-# Temporary lossfunction -----------------------------------------------------------------------
+# Lossfunction -----------------------------------------------------------------------
 
 def loss(pred,target):
     return (pred - target.float()).pow(2).sum()
