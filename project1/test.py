@@ -23,7 +23,7 @@ train_data, val_data, test_data = HL.import_data(flatten=False, one_khz=False, t
 print("train:{:0.2f}%, val{:0.2f}%, test{:0.2f}%".format((train_data.target_tensor.size()[0]/416), (val_data.target_tensor.size()[0]/416), (test_data.target_tensor.size()[0]/416)))
 
 # plot pretrained models 
-HL.plot_model_training(history=None, models=["lstm_0.4drop_200e_100hrz","lstm2_0.2drop_200e_100hrz"]) # "lstm_200e_100hrz"
+#HL.plot_model_training(history=None, models=["lstm_0.4drop_200e_100hrz","lstm2_0.2drop_200e_100hrz"]) # "lstm_200e_100hrz"
 
 # load pretrained models and test them
 HL.test_models(train_data, val_data, test_data,
