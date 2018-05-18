@@ -75,6 +75,8 @@ def flatten_input_data(input_data):
 
 def train_model(train_data, val_data, model, criterion, optimizer, learning_rate=1e-3,
                         epochs=10, batch_size=64, threads=2, checkpoint_name='model'):
+    # set seed
+    torch.manual_seed(0)
 
     # creating dataloaders to enable mini-batches
     train_data_loader = DataLoader(dataset=train_data, num_workers=threads, batch_size=batch_size, shuffle=False)
@@ -169,6 +171,9 @@ def checkpoint(model, epoch, epochs, checkpoint_name):
         
 
 def test_model(test_data, model, criterion, batch_size=64, threads=2):
+    # set seed
+    torch.manual_seed(0)
+    
     # set model in evaluation state to ignore dropout etc.
     model.eval()
     test_data_loader = DataLoader(dataset=test_data, num_workers=threads, batch_size=batch_size, shuffle=False)
