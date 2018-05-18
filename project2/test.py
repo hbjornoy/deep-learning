@@ -5,12 +5,13 @@ from torch import FloatTensor, LongTensor, Tensor
 # our own written code
 import helpers as HL
 
+
 ### Welcoming
 print('Linear, ReLU, Linear, ReLU, Linear, Tanh, Linear, Tanh')
 print('300 epochs')
 
 ### Generate data
-inputs, targets = HL.generate_disc_data(n=1000, seed=123)
+inputs, targets = HL.generate_disc_data(n=1000)
 
 
 ### Split the dataset into train, validation and test set
