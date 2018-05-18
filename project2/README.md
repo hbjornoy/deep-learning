@@ -10,7 +10,7 @@ tensor operations and the standard math library, hence in particular without usi
 neural-network modules.
 
 
-## Files and folders:
+## Files and folders
 
 **helpers.py**: File containing classes for framework and training function.
 
