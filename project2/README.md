@@ -29,5 +29,5 @@ All code was tested in a VM built on a Linux Debian 9.3 “stretch”, with mini
 ## Description of test.py
 test.py creates a non linear dataset and associated labels.
 A model with 2 input nodes, 3 hidden layers with 25 nodes and 2 output nodes, are created with following modules:             
-Linear - ReLU - Linear - ReLU - Linear - Tanh - Linear - Tanh                                                    
+*Linear - ReLU - Linear - ReLU - Linear - Tanh - Linear - Tanh*                                                    
 The model is trained for 300 epochs with learning rate 0.0001 with SGD and MSE-loss. The training and test error 
