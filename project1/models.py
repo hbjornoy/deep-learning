@@ -54,43 +54,21 @@ class FFNN(nn.Module):
         self.fc1 = nn.Linear(input_dim, hidden_width)
         self.dropout = nn.Dropout(dropout_rate)
         self.fc2 = nn.Linear(hidden_width, output_dim)
-        self.smax = nn.Softmax(dim=1)
+        self.sig = nn.Sigmoid()
 
     def forward(self, x):
         # flatten input_data, once feature and sequence is now one dimension
         x = HL.flatten_input_data(x)
+        
         out = self.fc1(x)
         out = self.dropout(F.relu(out))
         out = self.fc2(out)
-        out = self.smax(out)
+        out = self.sig(out)
         return out
 
-
-def DenseNet(input_dim, output_dim, nb_hidden_layers=1, hidden_width=100, dropout_rate=False):
-	"""
-	Fully connected feedforward neural net with adjustible, but uniform width of hidden layers and and adjustable depth
-	"""
-	if nb_hidden_layers < 1:
-		print("you need at least one hidden layer")
-		model = None
-	else:
-		layers = []
-		layers.append(nn.Linear(input_dim, hidden_width))
-		layers.append(nn.ReLU())
-		for i in range(nb_hidden_layers-1):
-			layers.append(nn.Linear(hidden_width, hidden_width))
-			layers.append(nn.ReLU())
-			if type(dropout_rate) == float and dropout_rate > 0.0 and dropout_rate < 1.0:
-				layers.append(nn.Dropout(p=dropout_rate))
-
-		layers.append(nn.Linear(hidden_width, output_dim))
-		layers.append(nn.Sigmoid())
-
-		model = nn.Sequential(*layers)
-		return model
     
 class conv_net1(nn.Module):
-    def __init__(self, input_dim, hidden_width, nb_layers, output_dim):
+    def __init__(self, input_dim, hidden_width, output_dim):
         super().__init__()
         # makes 224 features out of the time series and 24 features
         # feature making

@@ -27,8 +27,6 @@ print("train:{:0.2f}%, val{:0.2f}%, test{:0.2f}%".format((train_data.target_tens
 
 # load pretrained models and test them
 HL.test_models(train_data, val_data, test_data,
-["linear_1500e_lr3e-5"])
+["lstm_200e_lr3e-4"])
 
-#training of approximate best model
-# do not expect it to be exactly the same since the optimal model was creating using different 
-
+# know you should get the result of the best trained model

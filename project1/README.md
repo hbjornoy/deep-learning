@@ -24,7 +24,7 @@ key-press.
 **test.py**: executable that plot and test result of the best model as well as training of the same model (with sationary learning rate and batch_size)
 **helpers.py**: personal code of functions like plotting, import data, data handling etc.
 **models.py**: contains all the models mentioned in the report
-**blablabla.pdf**: The final report of the project
+**h_vard_deeplearning.pdf**: The final report of the project
 
 ## Requirements
 
